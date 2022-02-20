@@ -9,9 +9,9 @@ from datetime import datetime
 import os
 import fcntl
 import subprocess
+import csv
 
 PORT = "/dev/ttyACM0"
-RINGS_BEFORE_AUTO_ANSWER = 2 #Must be greater than 1
 MODEM_RESPONSE_READ_TIMEOUT = 120  #Time in Seconds (Default 120 Seconds)
 MODEM_NAME = 'U.S. Robotics'    # Modem Manufacturer, For Ex: 'U.S. Robotics' if the 'lsusb' cmd output is similar to "Bus 001 Device 004: ID 0baf:0303 U.S. Robotics"
 
@@ -36,7 +36,7 @@ def set_COM_port_settings(com_port):
     analog_modem.bytesize = serial.EIGHTBITS #number of bits per bytes
     analog_modem.parity = serial.PARITY_NONE #set parity check: no parity
     analog_modem.stopbits = serial.STOPBITS_ONE #number of stop bits
-    analog_modem.timeout = 1          #non-block read
+    analog_modem.timeout = 2          #non-block read
     analog_modem.xonxoff = False     #disable software flow control
     analog_modem.rtscts = False     #disable hardware (RTS/CTS) flow control
     analog_modem.dsrdtr = False      #disable hardware (DSR/DTR) flow control
@@ -53,7 +53,6 @@ def exec_AT_cmd(modem_AT_cmd, expected_response="OK"):
         disable_modem_event_listener = False
         return execution_status
     except:
-        print("there")
         disable_modem_event_listener = False
         print("Error: Failed to execute the command")
         return False
@@ -115,16 +114,50 @@ def close_modem_port():
         print("Error: Unable to close the Serial Port.")
         sys.exit()
         
-        
+def readFile(fileName):
+        fileObj = open(fileName, "r") #opens the file in read mode
+        items = fileObj.read().splitlines() #puts the file into an array
+        fileObj.close()
+        return items
+
+def pickupAndHangup():
+    print("ANSWERING")     
+    if not exec_AT_cmd("AT+FCLASS=8","OK"):
+        print("Error: Failed to put modem into voice mode.")
+    else:
+        if not exec_AT_cmd("AT+VSD=128,0","OK"):
+            print("Error: Unable to disable silence detection")
+        if not exec_AT_cmd("AT+VLS=1", "OK"):
+            print("Error: Unable to put modem into TAD mode. Tryied to answer call")
+    print("HANGUP")
+    if not exec_AT_cmd("ATH","OK"):
+        print("Error: Unable to hang-up the call")
+    else:
+        print("Call Terminated")
+
 def read_data():  
     global disable_modem_event_listener
     ring_data = ""
     while 1:
-            if not disable_modem_event_listener:
-                modem_data = analog_modem.readline()
-                if modem_data != "":
-                    print(modem_data)
-                
+        modem_data = ""
+        blacklist_array = readFile("blacklist_numbers.csv")
+        #print(blacklist_array)
+        if not disable_modem_event_listener:
+            modem_data = analog_modem.readline().decode()
+        if modem_data != "" and modem_data != b'':
+            print("Modem data: " + str(modem_data))
+            if ("NAME" in modem_data) or ("DATE" in modem_data) or ("TIME" in modem_data) or ("NMBR" in modem_data):
+                if ("NMBR" in modem_data):
+                    from_number = (modem_data[5:]).strip()
+                    #print(from_number)
+                    #print(blacklist_array)
+                    if from_number in blacklist_array or from_number.startswith("800"):    
+                        pickupAndHangup() 
+                        
+                if ("NAME" in modem_data):
+                    from_name =  (modem_data[5:]).strip()
+                    if "UNKNOWN" in from_name:
+                        pickupAndHangup()
     
 init_modem_settings()
 
