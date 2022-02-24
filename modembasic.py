@@ -141,6 +141,7 @@ def read_data():
     while 1:
         modem_data = ""
         blacklist_array = readFile("blacklist_numbers.csv")
+        blacklist_names = readFile("blacklist_names.csv")
         #print(blacklist_array)
         if not disable_modem_event_listener:
             modem_data = analog_modem.readline().decode()
@@ -155,9 +156,12 @@ def read_data():
                         pickupAndHangup() 
                         
                 if ("NAME" in modem_data):
-                    from_name =  (modem_data[5:]).strip()
-                    if "UNKNOWN" in from_name:
-                        pickupAndHangup()
+                    from_name = (modem_data[5:]).strip().upper()
+                    for blacklist_name in blacklist_names:
+                            if len(blacklist_name) > 1:
+                                if blacklist_name.upper() in from_name:
+                                    pickupAndHangup()
+                            
     
 init_modem_settings()
 
