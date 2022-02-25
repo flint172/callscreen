@@ -1,4 +1,5 @@
 import serial
+import logging
 import time
 import threading
 import atexit
@@ -10,6 +11,11 @@ import os
 import fcntl
 import subprocess
 import csv
+
+LOG_LEVEL = logging.INFO
+LOG_FILE = "/var/log/callscreen.log"
+LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
+logging.basicConfig(filename=LOG_FILE, format=LOG_FORMAT, level=LOG_LEVEL)
 
 PORT = "/dev/ttyACM0"
 MODEM_RESPONSE_READ_TIMEOUT = 120  #Time in Seconds (Default 120 Seconds)
@@ -44,7 +50,7 @@ def set_COM_port_settings(com_port):
 #=================================================================
 
 def exec_AT_cmd(modem_AT_cmd, expected_response="OK"):
-    print("Command: " + modem_AT_cmd)
+    logging.info("Command: " + modem_AT_cmd)
     global disable_modem_event_listener
     disable_modem_event_listener = True
     try:
@@ -54,7 +60,7 @@ def exec_AT_cmd(modem_AT_cmd, expected_response="OK"):
         return execution_status
     except:
         disable_modem_event_listener = False
-        print("Error: Failed to execute the command")
+        logging.error("Error: Failed to execute the command")
         return False
         
 def read_AT_cmd_response(expected_response="OK"):
@@ -70,34 +76,34 @@ def read_AT_cmd_response(expected_response="OK"):
             elif (datetime.now()-start_time).seconds > MODEM_RESPONSE_READ_TIMEOUT:
                 return False
     except Exception as e:
-        print(e)
-        print("Error in read_modem_response function...")
+        logging.error(e)
+        logging.error("Error in read_modem_response function...")
         return False
  
 def init_modem_settings():
-    print(PORT) 
+    logging.info(PORT) 
     set_COM_port_settings(PORT) 
     analog_modem.open()  
-    print("Port open!")
+    logging.info("Port open!")
     try:
         analog_modem.flushInput()
-        print("Flushed input")
+        logging.info("Flushed input")
         analog_modem.flushOutput()
-        print("Flushed output")
+        logging.info("Flushed output")
         if not exec_AT_cmd("AT"):
-            print("Error: Unable to access the Modem")
+            logging.error("Error: Unable to access the Modem")
         if not exec_AT_cmd("ATZ3"):
-            print("Error: Unable reset to factory default")
+            logging.error("Error: Unable reset to factory default")
         if not exec_AT_cmd("ATV1"):
-            print("Error: Unable set response in verbose form")	
+            logging.error("Error: Unable set response in verbose form")	
         if not exec_AT_cmd("ATE1"):
-            print("Error: Failed to enable Command Echo Mode")
+            logging.error("Error: Failed to enable Command Echo Mode")
         if not exec_AT_cmd("AT+VCID=1"):
-            print("Error: Failed to enable formatted caller report.")
+            logging.error("Error: Failed to enable formatted caller report.")
         analog_modem.flushInput()
         analog_modem.flushOutput()
     except:
-        print ("Error: unable to Initialize the Modem")
+        logging.error("Error: unable to Initialize the Modem")
         sys.exit()
 
 
@@ -109,9 +115,9 @@ def close_modem_port():
     try:
         if analog_modem.isOpen():
             analog_modem.close()
-            print ("Serial Port closed...")
+            logging.info("Serial Port closed...")
     except:
-        print("Error: Unable to close the Serial Port.")
+        logging.error("Error: Unable to close the Serial Port.")
         sys.exit()
         
 def readFile(fileName):
@@ -121,32 +127,32 @@ def readFile(fileName):
         return items
 
 def pickupAndHangup():
-    print("ANSWERING")     
+    logging.info("ANSWERING")     
     if not exec_AT_cmd("AT+FCLASS=8","OK"):
-        print("Error: Failed to put modem into voice mode.")
+        logging.error("Error: Failed to put modem into voice mode.")
     else:
         if not exec_AT_cmd("AT+VSD=128,0","OK"):
-            print("Error: Unable to disable silence detection")
+            logging.error("Error: Unable to disable silence detection")
         if not exec_AT_cmd("AT+VLS=1", "OK"):
-            print("Error: Unable to put modem into TAD mode. Tryied to answer call")
+            logging.error("Error: Unable to put modem into TAD mode. Tryied to answer call")
     print("HANGUP")
     if not exec_AT_cmd("ATH","OK"):
-        print("Error: Unable to hang-up the call")
+        logging.error("Error: Unable to hang-up the call")
     else:
-        print("Call Terminated")
+        logging.error("Call Terminated")
 
 def read_data():  
     global disable_modem_event_listener
     ring_data = ""
     while 1:
         modem_data = ""
-        blacklist_array = readFile("blacklist_numbers.csv")
-        blacklist_names = readFile("blacklist_names.csv")
+        blacklist_array = readFile("/home/pi/workspace/callscreen/blacklist_numbers.csv")
+        blacklist_names = readFile("/home/pi/workspace/callscreen/blacklist_names.csv")
         #print(blacklist_array)
         if not disable_modem_event_listener:
             modem_data = analog_modem.readline().decode()
         if modem_data != "" and modem_data != b'':
-            print("Modem data: " + str(modem_data))
+            logging.info("Modem data: " + str(modem_data))
             if ("NAME" in modem_data) or ("DATE" in modem_data) or ("TIME" in modem_data) or ("NMBR" in modem_data):
                 if ("NMBR" in modem_data):
                     from_number = (modem_data[5:]).strip()
