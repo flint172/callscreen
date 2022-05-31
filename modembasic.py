@@ -166,6 +166,10 @@ def read_data():
                     for blacklist_name in blacklist_names:
                             if len(blacklist_name) > 1:
                                 if blacklist_name.upper() in from_name:
+                                    logging.info("Name in blacklist")
+                                    pickupAndHangup()
+                                if len(from_name) < 3:
+                                    logging.info("From name too short")
                                     pickupAndHangup()
                             
     
